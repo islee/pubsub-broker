@@ -1,0 +1,60 @@
+# Render Blueprint — single free-tier web service.
+# NOTE: free tier has NO persistent disk (SQLite is wiped on redeploy/spin-down) and spins down
+# after 15 min idle. This is intentional — messages are ephemeral; the (epoch, seq) cursor makes
+# restart discontinuity explicit. See DESIGN.md §7.
+# CRITICAL: a single worker only — the in-memory dispatcher cannot be split across workers.
+services:
+  - type: web
+    name: pubsub-broker
+    runtime: python
+    plan: free
+    region: oregon
+    buildCommand: "pip install uv && uv sync --frozen"
+    startCommand: "uv run uvicorn broker.app:app --host 0.0.0.0 --port $PORT --workers 1"
+    healthCheckPath: /healthz
+    envVars:
+      - key: PYTHON_VERSION
+        value: "3.12"
+      # --- broker config (see broker/config.py for full list & defaults) ---
+      - key: BROKER_DB_PATH
+        value: "/tmp/broker.db"        # ephemeral; no disk on free tier
+      - key: BROKER_BUDGET_BYTES
+        value: "52428800"              # 50MB retention ceiling B
+      - key: BROKER_MIN_RETAIN
+        value: "16"                    # mandatory per-topic floor (last K)
+      - key: BROKER_TRANSPORTS
+        value: "sse,longpoll,webhook"  # ws deferred
+      # --- auth (DESIGN.md §8) ---
+      - key: BROKER_AUTH_BACKEND
+        value: "oauth"                 # oauth | api_key | none
+      # Enabled providers (all JWKS; token matched to one by its `iss`). Subset of:
+      #   supabase, cloudflare_access, auth0, okta, google
+      - key: BROKER_OAUTH_PROVIDERS
+        value: "supabase"
+      - key: BROKER_OAUTH_SVC_SCOPE
+        value: "broker:svc"            # scope/claim → svc role (Auth0/Okta)
+      - key: BROKER_OAUTH_SVC_PRINCIPALS
+        sync: false                    # subject allowlist → svc role (CF Access / Google)
+      # per-provider settings (set only those for enabled providers; secrets sync:false)
+      - key: BROKER_SUPABASE_PROJECT_REF
+        sync: false
+      - key: BROKER_CF_ACCESS_TEAM_DOMAIN
+        sync: false
+      - key: BROKER_CF_ACCESS_AUD
+        sync: false
+      - key: BROKER_AUTH0_DOMAIN
+        sync: false
+      - key: BROKER_AUTH0_AUDIENCE
+        sync: false
+      - key: BROKER_OKTA_DOMAIN
+        sync: false
+      - key: BROKER_OKTA_AUDIENCE
+        sync: false
+      - key: BROKER_GOOGLE_CLIENT_ID
+        sync: false
+      # --- persistence (DESIGN.md §§4.3, 6) ---
+      # Free tier = ephemeral mode (no external store; SQLite wiped on spin-down).
+      # Durable mode needs a PAID instance + managed Postgres; the external DB IS the durability:
+      #   BROKER_PERSIST_BACKEND=postgres ; BROKER_PERSIST_DSN=<managed-postgres-dsn> (sync:false)
+      - key: BROKER_PERSIST_BACKEND
+        value: "none"                  # none | postgres | kv

@@ -1,0 +1,38 @@
+# --- Python ---
+__pycache__/
+*.py[cod]
+.venv/
+.pytest_cache/
+.ruff_cache/
+.pyright/
+dist/
+build/
+*.egg-info/
+
+# --- local data / runtime ---
+*.db
+*.db-wal
+*.db-shm
+
+# --- secrets & credentials ---
+# Share ONLY the template; ignore every other .env variant.
+.env
+.env.*
+!.env.example
+# key-file based credentials (see *_FILE config wiring) and any local secrets dir
+secrets/
+*.pem
+*.key
+service-account*.json
+
+# --- AI assistant / private context (not part of the public project) ---
+CLAUDE.md
+AGENTS.md
+.claude/
+.cursor/
+.aider*
+
+# --- editor / OS ---
+.DS_Store
+.idea/
+.vscode/
